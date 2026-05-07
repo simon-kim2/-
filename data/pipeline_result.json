@@ -1,0 +1,15 @@
+{
+  "overall_status": "completed_with_hold",
+  "gate_passed": false,
+  "promotion_reason": "manual_approval_required",
+  "collect_logs": {
+    "synthetic_qa_rows": 10000,
+    "intent_error_rows": 0,
+    "output_rows": 10000
+  },
+  "metrics": {
+    "accuracy": 0.0,
+    "order_false_positive_rate": 0.0,
+    "total": 0
+  }
+}

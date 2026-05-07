@@ -1,0 +1,23 @@
+{
+  "critical_rate": 0.95,
+  "duplicate_count": 0,
+  "duplicate_rate": 0.0,
+  "gate_passed": true,
+  "intent_distribution": {
+    "buy": 235,
+    "cancel_pending": 825,
+    "investor_rank": 1128,
+    "price_current": 539,
+    "sell": 265,
+    "stock_analysis": 3166,
+    "theme_top": 1426,
+    "us_theme_rank": 1357,
+    "value_metric_single": 1059
+  },
+  "max_single_intent_rate": 0.3166,
+  "question_to_order_contamination": {
+    "count": 0,
+    "rate": 0.0
+  },
+  "rows": 10000
+}

@@ -1,0 +1,9 @@
+[project]
+name = "simon-trading-assistant"
+version = "0.1.0"
+description = "Safety-first NLU routing scaffold for Simon stock trading assistant"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
