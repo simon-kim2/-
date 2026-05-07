@@ -21,12 +21,14 @@ def iter_jsonl(path: Path):
 
 def collect_logs(
     *,
-    curated_path: Path = Path("data/curated/qa_intent_20000.jsonl"),
+    curated_path: Path = Path("data/curated/qa_intent_40000.jsonl"),
     intent_errors_path: Path = Path("data/intent_errors.jsonl"),
     output_path: Path = Path("data/curated/intent_training_merged.jsonl"),
-) -> dict[str, int]:
+) -> dict[str, int | str]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     rows = []
+    if not curated_path.exists():
+        curated_path = Path("data/curated/qa_intent_20000.jsonl")
     synthetic_rows = list(iter_jsonl(curated_path) or [])
     error_rows = list(iter_jsonl(intent_errors_path) or [])
     rows.extend(synthetic_rows)
@@ -38,6 +40,7 @@ def collect_logs(
 
     return {
         "synthetic_qa_rows": len(synthetic_rows),
+        "synthetic_qa_path": str(curated_path),
         "intent_error_rows": len(error_rows),
         "output_rows": len(rows),
     }

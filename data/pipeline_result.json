@@ -3,9 +3,10 @@
   "gate_passed": false,
   "promotion_reason": "manual_approval_required",
   "collect_logs": {
-    "synthetic_qa_rows": 10000,
+    "synthetic_qa_rows": 40000,
+    "synthetic_qa_path": "data/curated/qa_intent_40000.jsonl",
     "intent_error_rows": 0,
-    "output_rows": 10000
+    "output_rows": 40000
   },
   "metrics": {
     "accuracy": 0.0,
