@@ -1,0 +1,14 @@
+sources:
+  sidongtv:
+    channel_id: UCdwlSE2aW2VCCQIS5aJwTsA
+    whitelisted: true
+    internal_only: true
+    no_redistribute: true
+    advisory_only: true
+    order_trigger_allowed: false
+
+defaults:
+  internal_only: true
+  no_redistribute: true
+  advisory_only: true
+  order_trigger_allowed: false

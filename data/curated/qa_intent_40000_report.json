@@ -1,0 +1,33 @@
+{
+  "critical_rate": 0.9375,
+  "difficulty_distribution": {
+    "hard_question": 5011,
+    "standard": 34989
+  },
+  "duplicate_count": 0,
+  "duplicate_qa_count": 0,
+  "duplicate_qa_rate": 0.0,
+  "duplicate_rate": 0.0,
+  "gate_passed": true,
+  "hard_question_rate": 0.125275,
+  "hard_question_rows": 5011,
+  "intent_distribution": {
+    "buy": 1100,
+    "cancel_pending": 2800,
+    "investor_rank": 4800,
+    "market_brief": 2500,
+    "price_current": 2800,
+    "sell": 1400,
+    "stock_analysis": 9000,
+    "theme_top": 5000,
+    "us_theme_rank": 6000,
+    "value_metric_single": 4600
+  },
+  "max_single_intent_rate": 0.225,
+  "question_to_order_contamination": {
+    "count": 0,
+    "rate": 0.0
+  },
+  "rows": 40000,
+  "total_rows": 40000
+}
