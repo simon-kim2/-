@@ -1,0 +1,26 @@
+{
+  "report": "simon_p0_operational_stabilization",
+  "status": "repository_baseline_verified",
+  "not_certified_for_live_trading": true,
+  "verified_checks": {
+    "compileall": true,
+    "unit_tests": true,
+    "http_smoke": true,
+    "watchdog_once": true,
+    "report_generator": true
+  },
+  "safety_invariants": {
+    "executed_order_count": 0,
+    "auto_trade_enabled": false,
+    "HOLD": true,
+    "broker_submit_enabled": false,
+    "order_execution_enabled": false
+  },
+  "status_view_model": "StatusViewModel.v1",
+  "known_limits": [
+    "real_broker_connectivity_not_implemented",
+    "real_stt_hotword_capture_not_implemented",
+    "price_feed_defaults_to_unavailable",
+    "runtime_reports_are_generated_under_ignored_runtime_directory"
+  ]
+}
