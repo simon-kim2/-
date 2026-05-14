@@ -165,6 +165,18 @@ def open_dashboards(port: int) -> None:
         webbrowser.open_new_tab(base + path)
 
 
+def ensure(args: argparse.Namespace) -> int:
+    """If /api/status is already healthy, do not restart; optionally open dashboards."""
+    try:
+        fetch_status(args.port, timeout=2.0)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, RuntimeError):
+        return start(args)
+    if args.open_browser:
+        open_dashboards(args.port)
+    print(json.dumps({"ok": True, "already_running": True, "port": args.port}, ensure_ascii=False))
+    return 0
+
+
 def start(args: argparse.Namespace) -> int:
     stopped = stop_existing()
     proc = start_process(args.target, args.port)
@@ -210,6 +222,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     stop_parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     status_parser = sub.add_parser("status")
     status_parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ensure_parser = sub.add_parser("ensure")
+    ensure_parser.add_argument("--target", choices=("auto", "main", "server"), default=os.environ.get("SIMON_START_TARGET", "auto"))
+    ensure_parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ensure_parser.add_argument("--ready-timeout", type=float, default=30.0)
+    ensure_parser.add_argument("--open-browser", action="store_true", help="open dashboards when server is already up")
     return parser.parse_args(argv)
 
 
@@ -221,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         return stop(args)
     if args.command == "status":
         return status(args)
+    if args.command == "ensure":
+        return ensure(args)
     return 2
 
 
