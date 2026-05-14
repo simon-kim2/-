@@ -2,6 +2,31 @@ Simon 작업지시서 (로컬 Cursor / 공유용)
 전제 요약은 docs/SIMON_SHARE_PREMISES.txt 참고.
 
 --------------------------------------------------------------------
+로컬 PC (예: c:\주식ai\stock_trading) 동기화 — 반드시 읽을 것
+--------------------------------------------------------------------
+- 이 문서와 ops.launcher 등은 "클라우드/원격 저장소" 브랜치
+  (예: cursor/resident-chat-sse-6d82, PR #4)에 반영된 뒤,
+  로컬에서 pull/merge 하기 전까지는 로컬 트리에 없을 수 있다. 없음 = 동기화 안 된 상태.
+- 로컬에 git 이 있으면 (저장소 루트에서):
+    git fetch origin cursor/resident-chat-sse-6d82
+    git checkout cursor/resident-chat-sse-6d82
+  또는 작업 브랜치에 병합:
+    git fetch origin
+    git merge origin/cursor/resident-chat-sse-6d82
+- git 이 없으면: GitHub에서 해당 브랜치 ZIP 받거나 PR Merge 후 원격에서 pull.
+- 반영 후 존재 확인할 파일(최소):
+    docs/SIMON_WORK_DIRECTIVE.txt
+    docs/SIMON_SHARE_PREMISES.txt
+    ops/launcher.py
+    ops/__init__.py
+    scripts/start_simon_server_ensure.bat
+    simon_ops/kis_token_manager.py
+- start_simon_all.bat: 로컬이 "api/health + check_simon_status.ps1" 등으로 커스텀되어 있으면
+  자동으로 덮어쓰지 말 것. 선택지 (1) 수동으로 ops.launcher 한 줄만 이식
+  (2) 이 저장소용으로 scripts/start_simon_ops_p0.bat 를 별도 두고 기존 배치는 유지.
+- 이 P0 서버의 준비 확인 URL은 /api/status 이다 (/api/health 아님).
+
+--------------------------------------------------------------------
 0. 브로커 이관 (키움 제거)
 --------------------------------------------------------------------
 - 키움 OpenAPI / ActiveX / 32비트 브리지 전면 제거 대상에 다음을 포함한다.
