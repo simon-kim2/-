@@ -150,7 +150,7 @@ def render_account() -> bytes:
   <tr><th>계좌번호</th><td>{esc(core["account_number"] or "not_connected")}</td></tr>
   <tr><th>예수금</th><td>{esc(core["cash_balance"] if core["cash_balance_available"] else "unavailable")}</td></tr>
   <tr><th>보유수량</th><td>{esc(json.dumps(core["holdings"], ensure_ascii=False))}</td></tr>
-  <tr><th>브로커</th><td>{esc(core.get("broker_vendor", "kis"))} / 연결 {esc(core.get("broker_connected", False))}</td></tr>
+  <tr><th>브로커</th><td>{esc(core.get("broker_vendor", "kis"))} / 프로파일 {esc(core.get("broker_profile", "kis_paper"))} / 연결 {esc(core.get("broker_connected", False))}</td></tr>
   <tr><th>데이터 제한</th><td>market_data_limited={esc(core["market_data_limited"])}</td></tr>
 </table>
 """

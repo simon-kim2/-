@@ -69,6 +69,21 @@ class OpsP0Test(unittest.TestCase):
         self.assertTrue(route["approval_required"])
         self.assertFalse(route["execution_allowed"])
 
+    def test_status_audit_snapshot_keys(self) -> None:
+        status = state.build_status()
+        self.assertIn("status_audit", status)
+        audit = status["status_audit"]
+        for key in (
+            "git_hash",
+            "broker_profile",
+            "token_expires_in_sec",
+            "token_state",
+            "last_broker_error_summary",
+            "security_volume_status",
+        ):
+            self.assertIn(key, audit)
+        self.assertIn(audit["broker_profile"], ("kis_paper", "kis_live"))
+
 
 if __name__ == "__main__":
     unittest.main()

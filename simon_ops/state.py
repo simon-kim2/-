@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,7 @@ DEFAULT_CORE_STATE: dict[str, Any] = {
     "account_number": None,
     "account_connected": False,
     "broker_vendor": "kis",
+    "broker_profile": "kis_paper",
     "broker_connected": False,
     "openapi_errors": [],
     "price_feed_available": False,
@@ -159,6 +161,57 @@ def read_recent_alerts(limit: int = 10) -> list[dict[str, Any]]:
     return alerts
 
 
+def _git_hash_short() -> str:
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return "unknown"
+
+
+def _broker_error_summary(core: dict[str, Any]) -> str | None:
+    errors = core.get("openapi_errors")
+    if not isinstance(errors, list) or not errors:
+        return None
+    last = errors[-1]
+    if isinstance(last, str):
+        text = last
+    elif isinstance(last, dict):
+        text = str(last.get("message") or last.get("msg") or last)
+    else:
+        text = str(last)
+    text = text.strip()
+    if len(text) > 240:
+        return text[:237] + "..."
+    return text or None
+
+
+def _build_status_audit(core: dict[str, Any]) -> dict[str, Any]:
+    from simon_ops.kis_token_manager import KISTokenManager
+
+    tm = KISTokenManager()
+    snap = tm.audit_snapshot()
+    api_err = _broker_error_summary(core)
+    summary = snap.last_broker_error_summary or api_err
+    return {
+        "git_hash": _git_hash_short(),
+        "broker_profile": tm.broker_profile,
+        "token_expires_in_sec": snap.token_expires_in_sec,
+        "token_state": snap.token_state,
+        "last_broker_error_summary": summary,
+        "security_volume_status": os.environ.get("SIMON_SECURITY_VOLUME_STATUS", "unknown"),
+    }
+
+
 def compute_order_execution(core: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     if core.get("mode") != "paper":
@@ -224,6 +277,7 @@ def build_status() -> dict[str, Any]:
             "production_auto_promote_forbidden": True,
         },
         "recent_alerts": read_recent_alerts(),
+        "status_audit": _build_status_audit(core),
     }
     return status
 
