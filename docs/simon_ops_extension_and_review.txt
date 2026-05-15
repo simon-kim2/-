@@ -1,0 +1,168 @@
+SIMON 추가 확장·보안 보완안 — 디렉토리 트리 + 초안 코드 + 도입 전 리뷰
+작성 목적: 로컬 stock_trading과 동기화해 올 때 참고. 코드 그대로 복사 운용 금지; 리뷰 절 후 재작성 권장.
+
+================================================================================
+1) 제안 디렉토리 트리 (텍스트)
+
+주식ai/stock_trading/
+└── simon_ops/
+    ├── fsm_guard.py              # 경계 침범 방지용 상태머신(주문 게이트)
+    ├── chunk_validator.py        # SSE 스트리밍 구간 숫자·종료 기호 검수
+    ├── vram_manager.py           # PyTorch 프로세스 VRAM 상한 힌트(한계 있음)
+    ├── rolling_logger.py         # 마스킹 + 용량 상한 로그
+    └── dashboard_commands.py     # (선택) Failsafe 라우터 등 음성/텍스트 라우팅
+
+================================================================================
+2) [대안 1] 회색지대 오분류 차단 — Failsafe 스코어링 라우터 (초안)
+
+의도: 키워드 점수가 모호하면 LLM 스킵을 취소하고 격리 경로로 이관, UI에 출처 마킹.
+
+# simon_ops/dashboard_commands.py (보완본 개념)
+def route_voice_command_failsafe(user_text: str) -> dict:
+    text_clean = user_text.replace(" ", "")
+
+    has_ticker = any(k in text_clean for k in ["삼전", "삼성", "하이닉스", "닉스"])
+    has_action = any(k in text_clean for k in ["사", "팔", "주문", "취소", "진입"])
+
+    if has_ticker and has_action and ("하고" in text_clean or "해서" in text_clean):
+        return {
+            "INTENT": "COMPLEX_REASONING",
+            "LLM_SKIP_ALLOWED": False,
+            "ACTION_SOURCE": "LLM_SANDBOX_ENGINE",
+            "DANGEROUS": True,
+        }
+
+    if "잔고" in text_clean and not has_action:
+        return {
+            "INTENT": "account_summary",
+            "LLM_SKIP_ALLOWED": True,
+            "ACTION_SOURCE": "HARDCODED_RULE_ENGINE",
+        }
+
+    return {"INTENT": "UNKNOWN", "LLM_SKIP_ALLOWED": False, "ACTION_SOURCE": "LLM_FALLBACK"}
+
+--------------------------------------------------------------------------------
+리뷰 (대안 1)
+- 키워드 하드코딩은 유지보수 부담·오분류(예: "사과", "취소각")·동음이의에 취약.
+- text_clean = 공백만 제거: 띄어쓰기·은어·영문 티커·오타에 약함.
+- has_action에 "사" 단독 포함은 한글 문장에서 과탐 가능.
+- 장점: 회색 패턴을 명시적으로 "LLM 필수"로 보내 체감 보수화 가능 → 샘플 기반 회귀 테스트 세트와 병행 필요.
+
+================================================================================
+3) [대안 2·5] SSE 청크 실시간 숫자 필터 (초안)
+
+import re
+
+class SSEChunkValidator:
+    def __init__(self, allowed_fact_set: set):
+        self.allowed_facts = allowed_fact_set
+        self.text_buffer = ""
+
+    def validate_and_filter_chunk(self, token_chunk: str) -> str:
+        self.text_buffer += token_chunk
+
+        if "[제안]" in self.text_buffer or "###" in self.text_buffer:
+            raise StopIteration("[Guard] 정돈된 문장 종료 기호 감지")
+
+        numbers = re.findall(r'\d+', token_chunk)
+        for num in numbers:
+            if num not in self.allowed_facts and len(num) >= 3:
+                return token_chunk.replace(num, "[확인불가 수치]")
+
+        return token_chunk
+
+--------------------------------------------------------------------------------
+리뷰 (대안 2·5)
+- StopIteration: async 제너레이터/SSE 소비 코드에서 예외 처리 누락 시 전체 스트림 중단·고아 태스크 유발 가능. "정지 신호 객체"나 콜백이 더 안전한 경우 많음.
+- len(num) >= 3: 가격·수량·년도·코드번호 등 정당한 숫자도 걸러 설명 문장이 부자연스러워질 수 있음. 허용 집합은 "문자열 정규화"(콤마 제거 등)와 스냅샷 시각 일치가 필요.
+- token_chunk만 replace: 버퍼 전체 일관성·다중 출현 숫자 처리 미흡.
+- 정책 대안: 숫자는 스트림에서 아예 금지하고, 치환은 템플릿 측에서만(명세의 "팩트는 스키마")이 구현 난이도 대비 안전도 높음.
+
+================================================================================
+4) [대안 3] State Lock FSM (초안)
+
+class SimonStateMachineGuard:
+    def __init__(self):
+        self.current_state = "STATE_READ_ONLY_LOOKUP"
+
+    def transit_state(self, voice_text: str):
+        if "시스템 주문 모드 시작" in voice_text:
+            self.current_state = "STATE_ORDER_PREPARE"
+        elif "주문 종료" in voice_text:
+            self.current_state = "STATE_READ_ONLY_LOOKUP"
+
+    def verify_broker_submission_allowed(self) -> bool:
+        if self.current_state == "STATE_READ_ONLY_LOOKUP":
+            return False
+        return True
+
+--------------------------------------------------------------------------------
+리뷰 (대안 3)
+- 정확한 문구 매칭: STT 오인식·유사 문장 우회·다국어 혼입에 약함. 화이트리스트 + UI 버튼과 이중 잠금이 명세와 맞음.
+- transit만 있고 멀티스레드/비동기 동시 주문 경로 직렬화 없으면 TOCTOU 가능.
+- 브로커 호출부 전역에서 verify_* 단일 게이트로만 진입하게 연결해야 "물리적"에 가까워짐.
+
+================================================================================
+5) [대안 4] 500MB 순환 로그 (초안)
+
+import os
+import re
+
+class SimonRollingLogger:
+    def __init__(self, log_dir="logs", max_bytes=500 * 1024 * 1024):
+        self.log_dir = log_dir
+        self.max_bytes = max_bytes
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+    def secure_log(self, turn_id: str, raw_output: str):
+        clean_text = re.sub(r'\d{6,}', '[MASKED_ACCOUNT]', raw_output)
+        clean_text = re.sub(r'[a-zA-Z0-9]{32,}', '[MASKED_API_KEY]', clean_text)
+
+        log_path = os.path.join(self.log_dir, "simon_secure.log")
+
+        if os.path.exists(log_path) and os.path.getsize(log_path) > self.max_bytes:
+            os.rename(log_path, log_path + ".old")
+
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{turn_id}] {clean_text}\n")
+
+--------------------------------------------------------------------------------
+리뷰 (대안 4)
+- 6자리 이상 숫자 마스킹: 가격·수량·시각 표현까지 지워 로그 가독성·디버깅 저하 가능.
+- 32자 영숫자: 해시·세션 ID까지 오탐 가능. 키 포맷은 KIS 문서 기반 정밀 패턴이 나음.
+- 로테이션: .old 하나만 두면 두 번째 순환 시 정책 불명확. 단일 파일 append는 멀티프로세스에서 경합 가능 → logging.handlers.RotatingFileHandler 등 검토.
+- 디스크 쓰기 전 마스킹은 필수이나, Regex는 보조이고 명세대로 토큰·계좌는 구조적으로 로그 대상에서 배제하는 편이 안전.
+
+================================================================================
+6) [대안 6] VRAM 캡 (초안) — 주의: Ollama와 프로세스 분리
+
+import os
+import torch
+
+def allocate_rtx3090_sandbox_vram():
+    if torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(0.22, device=0)
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+        print("[Hardware Guard] RTX 3090 VRAM 파이썬 트리 상한 힌트 적용")
+
+--------------------------------------------------------------------------------
+리뷰 (대안 6)
+- torch.cuda.set_per_process_memory_fraction 은 **해당 Python 프로세스**의 할당 상한에 가깝고, **별도 프로세스인 Ollama(llama.cpp/CUDA)** VRAM과는 경계가 나뉘지 않음. "파이썬 5GB, Ollama 16GB" 식 **하드 파티션**이 되지는 않음.
+- 실제 OOM 방지는 (1) 동시 추론 금지 큐 (2) YOLO·Qwen 시간 분리 (3) 해상도·배치 축소 (4) Ollama 쪽 num_gpu·모델 하나만 로드 등 **운영 정책**이 본체.
+- 원문에 있던 `os.environ` 사용 전 **`import os` 누락**이 있었음 → 위 초안에서 보완.
+
+================================================================================
+7) [대안 7·8] Mock 주입·SSOT
+
+- 런타임 모의 에러 주입(429, 503, JSON 결함)은 계약 테스트·회귀에 매우 유효.
+- SSOT를 "로컬 주식ai\stock_trading main만"으로 고정한다는 선언은 협업·백업·CI와 상충할 수 있음. 실무적으로는:
+  - 사람이 인정하는 **단일 remote + 기본 브랜치 이름**,
+  - 로컬 경로는 그 클론 위치로만 의미 있음,
+  - 클라우드 작업(에이전트)은 **push된 커밋**만 기준으로 리뷰하는 규칙이 맞음.
+
+================================================================================
+8) 종합
+
+- 본 문서의 Python 블록은 **아이디어 검증용**. 프로덕션 품질이 아니며, 예외 처리·동시성·국제화·테스트가 빠져 있음.
+- 도입 순서 제안: (1) fsm_guard 브로커 게이트 단일화 (2) rolling_logger + 마스킹 정책 문서화 (3) 라우터는 소규모 규칙 + 회귀 샘플 (4) 스트림 숫자 필터는 템플릿 우선 정책과 함께 설계 (5) VRAM은 프로세스별 실측 후 정책 문서에만 숫자 고정
