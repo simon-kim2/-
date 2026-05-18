@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simon Chat v2</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e5e7eb; }
+    header { padding: 12px 20px; background: #111827; border-bottom: 1px solid #374151; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    main { padding: 16px 20px; }
+    #control-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    #control-bar button { border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; background: #1f2937; color: #e5e7eb; }
+    #control-bar button.primary { background: #2563eb; }
+    #control-bar button.danger { background: #b91c1c; }
+    #status-panel { background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 12px; margin-bottom: 12px; white-space: pre-wrap; font-size: 14px; min-height: 48px; }
+    #voice-hint { color: #9ca3af; font-size: 13px; }
+    footer { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Simon Chat v2</strong>
+    <span id="control-flag-hint">flag not armed</span>
+  </header>
+  <main>
+    <section id="control-bar" aria-label="운영 컨트롤">
+      <button type="button" id="ctrl-cash-btn">예수금</button>
+      <button type="button" id="ctrl-snapshot-btn">현황</button>
+      <button type="button" id="ctrl-strategy-btn">전략</button>
+      <button type="button" class="primary" id="ctrl-auto-on-btn">자동매매 ON</button>
+      <button type="button" id="ctrl-auto-off-btn">자동매매 OFF</button>
+      <button type="button" id="ctrl-voice-on-btn">음성대화 ON (TTS only)</button>
+      <button type="button" id="ctrl-voice-off-btn">음성대화 OFF</button>
+      <button type="button" id="ctrl-resident-btn">Resident 시작</button>
+      <button type="button" class="danger" id="ctrl-emergency-btn">긴급중지</button>
+    </section>
+    <div id="status-panel" aria-live="polite">상태 패널: 예수금·현황·전략 버튼으로 /api/status 를 조회합니다.</div>
+    <p id="voice-hint">브라우저가 자동으로 듣기 시작하지 않습니다. 음성대화 ON은 Chat-v2 TTS only이며 Resident를 시작하지 않습니다.</p>
+    <form id="chat-form">
+      <input id="chat-input" autocomplete="off" placeholder="메시지 입력">
+      <button type="submit">전송</button>
+    </form>
+    <footer>
+      <button type="button" id="mic-btn" hidden>마이크 (수동 fallback)</button>
+    </footer>
+  </main>
+  <script>
+    const SIMON_CHAT_V2_VOICE_MODE = { enabled: false, ttsOnly: true };
+    const STATUS_URL = '/api/status';
+    const AUTO_TRADE_URL = '/api/control/auto-trade';
+    const EMERGENCY_URL = '/api/control/emergency-stop';
+    const RESIDENT_START_URL = '/api/control/resident/start';
+    const CHAT_SEND_URL = '/api/chat/send';
+    const CHAT_MESSAGES_URL = '/api/chat/messages';
+
+    const statusPanel = document.getElementById('status-panel');
+
+    async function refreshStatus() {
+      const r = await fetch(STATUS_URL, { cache: 'no-store' });
+      return r.json();
+    }
+
+    function renderCash(status) {
+      statusPanel.textContent = [
+        '예수금',
+        `account_summary: ${status.account_summary}`,
+        `orderable_cash: ${status.orderable_cash}`,
+        `estimated_asset: ${status.estimated_asset}`,
+        `cash_d2: ${status.cash_d2}`,
+      ].join('\n');
+    }
+
+    function renderSnapshot(status) {
+      statusPanel.textContent = [
+        '현황',
+        `broker_connected: ${status.broker_connected}`,
+        `connection_status_summary: ${status.connection_status_summary}`,
+        `hold: ${status.hold}`,
+        `git_hash: ${status.git_hash}`,
+        `status_degraded: ${status.status_degraded}`,
+      ].join('\n');
+    }
+
+    function renderStrategy(status) {
+      statusPanel.textContent = [
+        '전략',
+        `mode: ${status.mode}`,
+        `stage: ${status.stage}`,
+        `next_stage: ${status.next_stage}`,
+        `position_policy: ${status.position_policy}`,
+      ].join('\n');
+    }
+
+    async function sendText(mode) {
+      const input = document.getElementById('chat-input');
+      const text = (input && input.value) || '';
+      await fetch(CHAT_SEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, mode, session_id: 'resident_default' }),
+      });
+    }
+
+    document.getElementById('chat-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      sendText('manual');
+    });
+
+    document.getElementById('ctrl-cash-btn').addEventListener('click', async () => {
+      renderCash(await refreshStatus());
+    });
+
+    document.getElementById('ctrl-snapshot-btn').addEventListener('click', async () => {
+      renderSnapshot(await refreshStatus());
+    });
+
+    document.getElementById('ctrl-strategy-btn').addEventListener('click', async () => {
+      renderStrategy(await refreshStatus());
+    });
+
+    document.getElementById('ctrl-auto-on-btn').addEventListener('click', async () => {
+      const r = await fetch(AUTO_TRADE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      const data = await r.json();
+      document.getElementById('control-flag-hint').textContent =
+        data.flag_armed ? 'flag armed' : 'flag not armed';
+      if (data.missing_requirements) {
+        statusPanel.textContent = '자동매매 ON 차단:\n' + data.missing_requirements.join('\n');
+      }
+    });
+
+    document.getElementById('ctrl-auto-off-btn').addEventListener('click', async () => {
+      await fetch(AUTO_TRADE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      });
+      document.getElementById('control-flag-hint').textContent = 'flag not armed';
+    });
+
+    document.getElementById('ctrl-emergency-btn').addEventListener('click', async () => {
+      await fetch(EMERGENCY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      document.getElementById('control-flag-hint').textContent = 'flag not armed';
+    });
+
+    document.getElementById('ctrl-resident-btn').addEventListener('click', async () => {
+      if (!window.confirm('Resident 마이크 프로세스를 시작할까요? (브라우저 TTS와 별도)')) {
+        return;
+      }
+      const r = await fetch(RESIDENT_START_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await r.json();
+      statusPanel.textContent = JSON.stringify(data, null, 2);
+    });
+
+    document.getElementById('ctrl-voice-on-btn').addEventListener('click', () => {
+      SIMON_CHAT_V2_VOICE_MODE.enabled = true;
+      SIMON_CHAT_V2_VOICE_MODE.ttsOnly = true;
+      statusPanel.textContent = '음성대화 ON (TTS only). Resident 미시작.';
+    });
+
+    document.getElementById('ctrl-voice-off-btn').addEventListener('click', () => {
+      SIMON_CHAT_V2_VOICE_MODE.enabled = false;
+      statusPanel.textContent = '음성대화 OFF. Resident 중지는 scripts/stop_simon_resident.bat 등 운영자 액션.';
+    });
+
+    window.addEventListener('load', () => refreshStatus().catch(() => {}));
+  </script>
+</body>
+</html>
