@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import server
 
@@ -21,6 +21,13 @@ class TestChatV2ControlBar(unittest.TestCase):
         self.assertIn("TTS only", html)
         self.assertIn("브라우저가 자동으로 듣기 시작하지 않습니다", html)
         self.assertIn("Resident 시작", html)
+        self.assertIn("예수금", html)
+        self.assertIn("현황", html)
+        self.assertIn("전략", html)
+        self.assertIn("음성대화 ON", html)
+        self.assertIn("음성대화 OFF", html)
+        self.assertIn("긴급중지", html)
+        self.assertIn("/api/chat/messages", html)
         self.assertIn('id="mic-btn"', html)
         self.assertIn('id="ctrl-auto-on-btn"', html)
         self.assertIn("sendText('manual')", html)
@@ -37,10 +44,36 @@ class TestChatV2ControlBar(unittest.TestCase):
         self.assertTrue(payload["blocked"])
         self.assertFalse(payload["flag_armed"])
         self.assertIn("missing_requirements", payload)
-        self.assertIn("SIMON_ALLOW_LIVE=1", payload["missing_requirements"])
+        self.assertIn("read_only_mode=false", payload["missing_requirements"])
         self.assertIn("hold=false", payload["missing_requirements"])
+        self.assertIn("broker_connected=true", payload["missing_requirements"])
+        self.assertIn("status_degraded=false", payload["missing_requirements"])
         self.assertFalse(payload["status"]["broker_submit_allowed"])
-        self.assertEqual(payload["status"]["SIMON_ALLOW_LIVE"], "0")
+        self.assertTrue(payload["status"]["hold"])
+        self.assertTrue(payload["status"]["read_only_mode"])
+
+    def test_api_status_exposes_control_bar_fields(self):
+        response = self.client.get("/api/status")
+        self.assertEqual(response.status_code, 200)
+        status = response.get_json()
+        for key in (
+            "account_summary",
+            "orderable_cash",
+            "estimated_asset",
+            "cash_d2",
+            "broker_connected",
+            "connection_status_summary",
+            "hold",
+            "git_hash",
+            "mode",
+            "stage",
+            "next_stage",
+            "position_policy",
+            "read_only_mode",
+            "executed_order_count",
+            "status_degraded",
+        ):
+            self.assertIn(key, status)
 
     def test_auto_trade_off_writes_control_command(self):
         with patch.object(server.ipc, "write_command", return_value="cmd_auto_off") as write_command:
@@ -86,6 +119,19 @@ class TestChatV2ControlBar(unittest.TestCase):
         self.assertTrue(payload["already_running"])
         self.assertEqual(payload["pid"], 99999)
         mock_spawn.assert_not_called()
+
+    @patch("server._is_process_alive", return_value=False)
+    @patch("server._read_resident_pid_file", return_value=4242)
+    @patch("server.RESIDENT_PID_PATH")
+    @patch("server._spawn_resident_bat")
+    def test_resident_start_removes_stale_pid_before_spawn(self, mock_spawn, pid_path, *_):
+        pid_path.is_file.return_value = True
+        pid_path.unlink = MagicMock()
+        mock_spawn.return_value = {"ok": True, "pid": 12345, "log": "data/logs/resident/resident_spawn.log"}
+        response = self.client.post("/api/control/resident/start", json={})
+        self.assertEqual(response.status_code, 200)
+        pid_path.unlink.assert_called_once()
+        mock_spawn.assert_called_once()
 
     @patch("server._is_process_alive", return_value=False)
     @patch("server._read_resident_pid_file", return_value=None)

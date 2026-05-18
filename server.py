@@ -56,34 +56,65 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def build_control_status() -> dict[str, Any]:
-    allow_live = os.environ.get("SIMON_ALLOW_LIVE", "0")
     hold = _env_bool("STOCK_HOLD", default=True)
-    read_only = _env_bool("STOCK_READ_ONLY", default=True)
-    broker_submit_allowed = (
-        allow_live == "1" and not hold and not read_only and _env_bool("STOCK_BROKER_SUBMIT", default=False)
-    )
+    read_only_mode = _env_bool("STOCK_READ_ONLY", default=True)
+    broker_connected = _env_bool("STOCK_BROKER_CONNECTED", default=False)
+    broker_submit_allowed = _env_bool("STOCK_BROKER_SUBMIT", default=False) and not hold and not read_only_mode
+    order_execution_enabled = _env_bool("STOCK_ORDER_EXECUTION", default=False) and broker_submit_allowed
+    executed_order_count = int(os.environ.get("STOCK_EXECUTED_ORDER_COUNT", "0") or "0")
+    status_degraded = _env_bool("STOCK_STATUS_DEGRADED", default=True)
     return {
-        "SIMON_ALLOW_LIVE": allow_live,
-        "HOLD": hold,
-        "read_only": read_only,
+        "read_only_mode": read_only_mode,
+        "hold": hold,
+        "order_execution_enabled": order_execution_enabled,
         "broker_submit_allowed": broker_submit_allowed,
-        "order_execution_enabled": broker_submit_allowed,
+        "broker_connected": broker_connected,
+        "executed_order_count": executed_order_count,
+        "status_degraded": status_degraded,
         "auto_trade_enabled": _env_bool("STOCK_AUTO_TRADE", default=False),
         "chat_pipeline_version": CHAT_PIPELINE_VERSION,
+        "git_hash": os.environ.get("SIMON_GIT_HASH", "unknown"),
+        "connection_status_summary": os.environ.get(
+            "STOCK_CONNECTION_STATUS_SUMMARY", "disconnected"
+        ),
+        "account_summary": os.environ.get("STOCK_ACCOUNT_SUMMARY", "unavailable"),
+        "orderable_cash": os.environ.get("STOCK_ORDERABLE_CASH", "unavailable"),
+        "estimated_asset": os.environ.get("STOCK_ESTIMATED_ASSET", "unavailable"),
+        "cash_d2": os.environ.get("STOCK_CASH_D2", "unavailable"),
+        "mode": os.environ.get("STOCK_MODE", "shadow"),
+        "stage": os.environ.get("STOCK_STAGE", "idle"),
+        "next_stage": os.environ.get("STOCK_NEXT_STAGE", "none"),
+        "position_policy": os.environ.get("STOCK_POSITION_POLICY", "flat"),
     }
 
 
 def _auto_trade_missing_requirements(status: dict[str, Any]) -> list[str]:
+    checks = [
+        ("read_only_mode", False, "read_only_mode=false"),
+        ("hold", False, "hold=false"),
+        ("order_execution_enabled", True, "order_execution_enabled=true"),
+        ("broker_submit_allowed", True, "broker_submit_allowed=true"),
+        ("broker_connected", True, "broker_connected=true"),
+        ("executed_order_count", 0, "executed_order_count=0"),
+        ("status_degraded", False, "status_degraded=false"),
+    ]
     missing: list[str] = []
-    if status["SIMON_ALLOW_LIVE"] != "1":
-        missing.append("SIMON_ALLOW_LIVE=1")
-    if status["HOLD"]:
-        missing.append("hold=false")
-    if status["read_only"]:
-        missing.append("read_only=false")
-    if not status["broker_submit_allowed"]:
-        missing.append("broker_submit_allowed=true")
+    for field, expected, label in checks:
+        if status.get(field) != expected:
+            missing.append(label)
     return missing
+
+
+def _remove_stale_resident_pid_file() -> None:
+    pid = _read_resident_pid_file()
+    if pid is None:
+        return
+    if _is_process_alive(pid):
+        return
+    try:
+        RESIDENT_PID_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _read_resident_pid_file() -> int | None:
@@ -212,9 +243,13 @@ def control_auto_trade() -> Any:
                         "flag_armed": False,
                         "missing_requirements": missing,
                         "status": {
+                            "read_only_mode": status["read_only_mode"],
+                            "hold": status["hold"],
+                            "order_execution_enabled": status["order_execution_enabled"],
                             "broker_submit_allowed": status["broker_submit_allowed"],
-                            "SIMON_ALLOW_LIVE": status["SIMON_ALLOW_LIVE"],
-                            "HOLD": status["HOLD"],
+                            "broker_connected": status["broker_connected"],
+                            "executed_order_count": status["executed_order_count"],
+                            "status_degraded": status["status_degraded"],
                         },
                     }
                 ),
@@ -269,6 +304,7 @@ def control_resident_start() -> Any:
     if pid is not None and _is_process_alive(pid):
         return jsonify({"ok": True, "already_running": True, "pid": pid})
 
+    _remove_stale_resident_pid_file()
     spawn = _spawn_resident_bat()
     if spawn.get("ok"):
         return jsonify(
