@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simon Chat v2</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e5e7eb; }
+    header { padding: 12px 20px; background: #111827; border-bottom: 1px solid #374151; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Simon Chat v2</strong>
+    <span id="control-flag-hint">flag not armed</span>
+  </header>
+  <main>
+    <section id="control-bar" aria-label="운영 컨트롤">
+      <button type="button" id="ctrl-auto-on-btn">자동매매 ON</button>
+      <button type="button" id="ctrl-auto-off-btn">자동매매 OFF</button>
+      <button type="button" id="ctrl-emergency-btn">긴급 정지</button>
+      <button type="button" id="ctrl-resident-btn">Resident 시작</button>
+      <button type="button" id="ctrl-voice-btn">음성대화 (TTS only)</button>
+    </section>
+    <p id="voice-hint">브라우저가 자동으로 듣기 시작하지 않습니다. 음성대화 ON은 브라우저 TTS만 사용합니다.</p>
+    <form id="chat-form">
+      <input id="chat-input" autocomplete="off" placeholder="메시지 입력">
+      <button type="submit">전송</button>
+    </form>
+    <footer>
+      <button type="button" id="mic-btn" hidden>마이크</button>
+    </footer>
+  </main>
+  <script>
+    const SIMON_CHAT_V2_VOICE_MODE = { enabled: false, ttsOnly: true };
+    const STATUS_URL = '/api/status';
+    const AUTO_TRADE_URL = '/api/control/auto-trade';
+    const EMERGENCY_URL = '/api/control/emergency-stop';
+    const RESIDENT_START_URL = '/api/control/resident/start';
+    const CHAT_SEND_URL = '/api/chat/send';
+
+    async function refreshStatus() {
+      const r = await fetch(STATUS_URL, { cache: 'no-store' });
+      return r.json();
+    }
+
+    async function sendText(mode) {
+      const input = document.getElementById('chat-input');
+      const text = (input && input.value) || '';
+      await fetch(CHAT_SEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, mode, session_id: 'resident_default' }),
+      });
+    }
+
+    document.getElementById('chat-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      sendText('manual');
+    });
+
+    document.getElementById('ctrl-auto-on-btn').addEventListener('click', async () => {
+      const r = await fetch(AUTO_TRADE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      const data = await r.json();
+      document.getElementById('control-flag-hint').textContent =
+        data.flag_armed ? 'flag armed' : 'flag not armed';
+    });
+
+    document.getElementById('ctrl-auto-off-btn').addEventListener('click', async () => {
+      await fetch(AUTO_TRADE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      });
+    });
+
+    document.getElementById('ctrl-emergency-btn').addEventListener('click', async () => {
+      await fetch(EMERGENCY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    });
+
+    document.getElementById('ctrl-resident-btn').addEventListener('click', async () => {
+      await fetch(RESIDENT_START_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    });
+
+    document.getElementById('ctrl-voice-btn').addEventListener('click', () => {
+      SIMON_CHAT_V2_VOICE_MODE.enabled = !SIMON_CHAT_V2_VOICE_MODE.enabled;
+    });
+
+    window.addEventListener('load', () => refreshStatus().catch(() => {}));
+  </script>
+</body>
+</html>
