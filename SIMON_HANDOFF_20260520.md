@@ -12,13 +12,15 @@
 **KIS**: 한국투자증권 API — 단계적 연동(읽기 전용 → 토큰/레이트리밋 → 실 HTTP는 게이트 뒤).  
 **Resident**: 상시 마이크 VAD+STT 백그라운드 프로세스 — **현재 실험/로그 위주**, Chat-v2 오염 방지 기본 OFF.
 
+**운영자(감독) ↔ Simon ↔ Qwen** 관계 상세: **`SIMON_QWEN_OPERATOR_RELATION_20260520.md`** (권한·신뢰·시나리오·학습 병행).
+
 ---
 
 ## 2. 역할 분담 (반드시 유지)
 
 | 역할 | 담당 | 할 일 |
 |------|------|--------|
-| 사용자 | 감독·최종 PASS | UI/음성/속도 체감, “된다/안 된다” 판정 |
+| **운영자(사용자)** | **감독·최종 PASS** | UI/음성/속도, **주문·실연동·학습·GPU 승인**; Simon=사실, Qwen=설명만 (상세는 관계 문서) |
 | Cloud Cursor (이전 세션) | 목표·기준·지시서 | 아키텍처, 검증 기준, Local1/2 지시 |
 | **Local Cursor 1** | 구현 | 코드·테스트·보고서 |
 | **Local Cursor 2** | **독립 검증** | Local1이 한 일을 로그/API/UI로 재현·반박 |
@@ -193,7 +195,9 @@
 ## 13. 첫 메시지 템플릿 (신규 Cursor에 붙여넣기)
 
 ```
-Simon 로컬 프로젝트 이어갑니다. 핸드오프: SIMON_HANDOFF_20260520.md
+Simon 로컬 프로젝트 이어갑니다.
+핸드오프: SIMON_HANDOFF_20260520.md
+운영자·Simon·Qwen 관계: SIMON_QWEN_OPERATOR_RELATION_20260520.md
 
 역할: Local2 검증자. Local1이 완료한 KIS tokenP HTTP contract stub을 독립 검증해 주세요.
 - KIS_ALLOW_TOKEN_REQUEST=0, KIS_USE_REAL_HTTP=0 유지
