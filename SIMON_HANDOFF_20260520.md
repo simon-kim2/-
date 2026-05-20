@@ -14,6 +14,8 @@
 
 **운영자(감독) ↔ Simon ↔ Qwen** 관계 상세: **`SIMON_QWEN_OPERATOR_RELATION_20260520.md`** (권한·신뢰·시나리오·학습 병행).
 
+**작업 순서·Gate (강제)**: **`SIMON_MASTER_PLAN_20260520.md`** ← 신규 Cursor는 이 문서를 SSOT로 따른다.
+
 ---
 
 ## 2. 역할 분담 (반드시 유지)
@@ -105,7 +107,7 @@
 
 ---
 
-## 6. Resident E2E (아직 최우선 UX 중 하나)
+## 6. Resident E2E (T4 — 스프린트 1·2 CLOSED 후만, §MASTER_PLAN)
 
 **표준 발화**:
 ```
